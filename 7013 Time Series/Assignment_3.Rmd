@@ -1,0 +1,340 @@
+---
+title: "Assignment_3"
+author: "Dongyu Zhang"
+date: "12/11/2018"
+output:
+  html_document:
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forecast)
+library(fma)
+library(expsmooth)
+```
+
+## Question1
+$$
+\begin{aligned}
+x_t = 1.71x_{t-1} - 1.14x_{t-2} + .267x_{t-3} + \epsilon_t
+\Rightarrow x_{1}
+\end{aligned}
+$$
+      
+### Sovling $x_{3}(1)$
+$$
+\begin{aligned}
+\hat x_t(1) =& E(x_{t+1}|x_1,x_2,\cdots,x_t)\\
+=& E(1.71x_{t} - 1.14x_{t-1} + .267x_{t-2} + \epsilon_{t+1}|x_1,x_2,\cdots,x_t)\\
+=& 1.71x_{t} - 1.14x_{t-1} + .267x_{t-2}\\
+\\
+\Rightarrow 
+\hat x_3(1) =& 1.71x_{3} - 1.14x_{2} + .267x_{1}\\
+=& 1.71*1.49 -1.14*.910 + .267*.859\\
+=& 1.74
+\end{aligned}
+$$
+      
+### Solving $x_{3}(2)$
+$$
+\begin{aligned}
+\hat x_t(2) =& E(x_{t+2}|x_1,x_2,\cdots,x_t)\\
+=& E(1.71x_{t+1} - 1.14x_{t} + .267x_{t-1} + \epsilon_{t+2}|x_1,x_2,\cdots,x_t)\\
+=& 1.71x_t(1)- 1.14x_{t} + .267x_{t-1}\\
+\\
+\Rightarrow 
+\hat x_3(2) =& 1.71x_3(1) - 1.14x_{3} + .267x_{2}\\
+=& 1.71*1.74 - 1.14*1.49 + .267*.910\\
+=& 1.52
+\end{aligned}
+$$
+      
+### Solving $x_{3}(3)$
+$$
+\begin{aligned}
+\hat x_t(3) =& E(x_{t+3}|x_1,x_2,\cdots,x_t)\\
+=& E(1.71x_{t+2} - 1.14x_{t+1} + .267x_{t} + \epsilon_{t+3}|x_1,x_2,\cdots,x_t)\\
+=& 1.71x_t(2) - 1.14x_t(1) + .267x_{t}\\
+\\
+\Rightarrow 
+\hat x_3(3) =& 1.71x_3(2) - 1.14x_3(1) + .267x_{3}\\
+=& 1.71*1.52 - 1.14*1.74 + .267*1.49\\
+=& 1.01
+\end{aligned}
+$$
+
+## Question2
+The process:
+$$
+\begin{aligned}
+& (1-\phi_1B-\phi_2B^2)(x_t-\mu)\\
+=& (x_t-\mu)-\phi_1(x_{t-1}-\mu)-\phi_2(x_{t-2}-\mu)\\
+\\
+&(1-\theta_1B-\theta_2B^2)\epsilon_t \\
+=&\epsilon_t-\theta_1\epsilon_{t-1}-\theta_2\epsilon_{t-2}\\
+\\
+\Rightarrow& x_t-\mu=\phi_1(x_{t-1}-\mu)+\phi_2(x_{t-2}-\mu)+\epsilon_t-\theta_1\epsilon_{t-1}-\theta_2\epsilon_{t-2}\\
+\end{aligned}
+$$
+It is clear that this is a centered ARMA(2,2) process.<br>
+    
+### 1-step ahead forecast
+$$
+\begin{aligned}
+Set&: y_t=x_t-\mu\\
+\Rightarrow y_t&=\phi_1y_{t-1}+\phi_2y_{t-2}+\epsilon_t-\theta_1\epsilon_{t-1}-\theta_2\epsilon_{t-2}\\\\
+\hat y_{n}(1) &= E(y_{n+1}|y_1,y_2,\cdots,y_n,\epsilon_1,\epsilon_2,\cdots,\epsilon_n)\\
+&=E(\phi_1y_n+\phi_2y_{n-1}+\epsilon_{n+1}-\theta_1\epsilon_n-\theta_2\epsilon_{n-1}|\cdots)\\
+&=\phi_1y_n+\phi_2y_{n-1}-\theta_1\epsilon_n-\theta_2\epsilon_{n-1}\\
+\\
+\Rightarrow 
+\hat x_n(1)&=\mu+\phi_1(x_n-\mu)+\phi_2(x_{n-1}-\mu)-\theta_1\epsilon_n-\theta_2\epsilon_{n-1}\\
+&=40 + .7(25-40)+.4(20-40)-.6*3-.4*1\\
+&=19.3
+\end{aligned}
+$$
+    
+### 3-step ahead forecast
+$$
+\begin{aligned}
+\hat y_{n}(2) &= E(y_{n+2}|y_1,y_2,\cdots,y_n,\epsilon_1,\epsilon_2,\cdots,\epsilon_n)\\
+&=E(\phi_1y_{n+1}+\phi_2y_{n}+\epsilon_{n+2}-\theta_1\epsilon_{n+1}-\theta_2\epsilon_{n}|...)\\
+&=\phi_1\hat y_{n}(1)+\phi_2y_{n}-\theta_2\epsilon_{n}\\
+\\
+\Rightarrow 
+\hat x_n(2)&=\mu+\phi_1(\hat x_{n}(1)-\mu)+\phi_2(x_n-\mu)-\theta_2\epsilon_n\\
+&=40 + .7(19.3-40)+.4(25-40)-.4*3\\
+&=18.31\\
+\\
+\hat y_{n}(3) &= E(y_{n+3}|y_1,y_2,\cdots,y_n,\epsilon_1,\epsilon_2,\cdots,\epsilon_n)\\
+&=E(\phi_1y_{n+2}+\phi_2y_{n+1}+\epsilon_{n+3}-\theta_1\epsilon_{n+2}-\theta_2\epsilon_{n+1}|\cdots)\\
+&=\phi_1\hat y_{n}(2)+\phi_2\hat y_{n}(1)\\
+\\
+\Rightarrow 
+\hat x_n(3)&=\mu+\phi_1(\hat x_{n}(2)-\mu)+\phi_2(\hat x_{n}(1)-\mu)\\
+&=40 + .7(18.31-40)+.4(19.3-40)\\
+&=16.54
+\end{aligned}
+$$
+    
+## Question 3
+Preparing the function that will be used in this question.
+```{r}
+source("arma_forecast.R")
+predict.plot = function(prediction,name,nn,nt=8){
+  tt=(nn-5):nn
+  xxx=x[tt]
+  rr=range(c(xxx,pred[1,]+2*pred[2,],pred[1,]-2*pred[2,]))*c(0.9,1.1)
+  plot(tt,xxx,pch=3,xlim=c(nn-6,nn+nt),ylim=rr)
+  lines(tt,xxx)
+  lines(c(nn,nn),rr,lty=3)
+  points(nn+1:nt,pred[1,],pch=2)
+  lines(nn+0:nt,c(x[nn],pred[1,]),lty=5,col="blue")
+  lines(nn+1:nt,pred[1,]+2*pred[2,],lty=2,col="blue")
+  lines(nn+1:nt,pred[1,]-2*pred[2,],lty=2,col="blue")
+  lines(c(nn-6,nn+nt),c(1,1)*20,lty=10)
+  title = paste("Prediction and 95% Prediction Interval of",name)
+  title(title)
+}
+```
+     
+### For AR(3)
+```{r}
+phi0 = 0.3
+phi1 = 0.8
+phi2 = -0.5
+phi3 = -0.2
+mu = 1/3
+sigma = 1
+nt=8
+xhat=rep(NA,8)
+se2=rep(sigma^2,8)
+
+set.seed(1)
+x=arima.sim(model=list(ar=c(phi1,phi2,phi3)),sd=1,n=10000)+mu
+nn=5000
+xx=x[(nn-400):nn]
+
+pred=I0.predict(xx,ar=c(phi1,phi2,phi3),mu=mu,origin=length(xx),h=8,sigma2=1)
+
+predict.plot(pred,"AR(3)",nn)
+```
+    
+### For MA(3)
+```{r}
+mu = 0.3
+theta1 = 0.8
+theta2 = -0.5
+theta3 = -0.2
+sigma = 1
+nt=8
+xhat=rep(NA,8)
+se2=rep(sigma^2,8)
+
+set.seed(1)
+x=arima.sim(model=list(ma=c(theta1,theta2,theta3)),sd=1,n=10000)+mu
+nn=5000
+xx=x[(nn-400):nn]
+
+pred=I0.predict(xx,ma=c(theta1,theta2,theta3),mu=mu,origin=length(xx),h=8,sigma2=1)
+
+predict.plot(pred,"MA(3)",nn)
+```
+    
+### For ARMA(3,2)
+```{r}
+phi0 = 0.3
+phi1 = 0.8
+phi2 = -0.5
+phi3 = -0.2
+theta1 = 0.5
+theta2 = +0.3
+mu = 1/3
+sigma = 1
+nt=8
+xhat=rep(NA,8)
+se2=rep(sigma^2,8)
+
+set.seed(1)
+x=arima.sim(model=list(ar=c(phi1,phi2,phi3),ma=c(theta1,theta2)),sd=1,n=10000)+mu
+nn=5000
+xx=x[(nn-400):nn]
+
+pred=I0.predict(xx,ar=c(phi1,phi2,phi3),ma=c(theta1,theta2),mu=mu,origin=length(xx),h=8,sigma2=1)
+
+predict.plot(pred,"ARMA(3,2)",nn)
+```
+    
+## Question 4
+\begin{aligned}
+  \begin{pmatrix}
+    \hat\gamma_0  & \hat\gamma_1 \\
+    \hat\gamma_1  & \hat\gamma_0 \\
+  \end{pmatrix}
+  
+  \begin{pmatrix}
+    \phi_1\\
+    \phi_2
+  \end{pmatrix}
+  
+  =&\;
+  
+  \begin{pmatrix}
+    \hat\gamma_1\\
+    \hat\gamma_2
+  \end{pmatrix}
+  \\\\
+  \begin{pmatrix}
+   1.7379  & 1.4458 \\
+   1.4458  & 1.7379 \\
+  \end{pmatrix}
+  \begin{pmatrix}
+   \phi_1\\
+   \phi_2
+  \end{pmatrix}
+  =&\;
+  \begin{pmatrix}
+   1.4458\\
+   1.0600
+  \end{pmatrix}\\
+  \end{aligned}
+
+  \begin{aligned}
+  \\
+  \Rightarrow&
+  \begin{cases}
+  \phi_1 = 1.0539\\
+  \phi_2 = -0.2669
+  \end{cases}\\
+  \\
+  &
+  \begin{aligned}
+  \sigma^2 =& 1.7379-(1.0539,-0.2669)
+  \begin{pmatrix}
+   1.4458\\
+   1.0600
+  \end{pmatrix}\\
+  =&0.4971
+  \end{aligned}
+  \\\\
+  \Rightarrow\,
+  &AR(2):x_t=.3327+1.0539x_{t-1}-.2669x_{t-2}+\epsilon_t,\ \epsilon_t \sim N(0,.4971)
+\end{aligned}
+   
+## Question 5
+### a.
+From these three plots, it is clearly that the critical values of ACF decreases when the number of random number increases. However, all ACFs lie within the boundary which shows the data is white noise.
+
+### b.
+The critical values are calculated by $\frac{\pm1.96}{\sqrt T}$ where T represent the number of random numbers. In such case, it will decrease as T,the number of random numbers, gets bigger.<br>
+White noise means each number is independent. Every number is not related to the previous and will not affect number after it. So, each amoung of random numbers have different pattern.
+
+## Question 6
+```{r}
+par(mfrow=c(1,2))
+acf(ibmclose,lag.max = 15)
+pacf(ibmclose,lag.max = 15)
+```
+<br>In ACF plot, ACFs are all above limits and is slowly decreasing which shows the trend in series. And from pacf it shows that this is an AR(1) process.
+
+## Question 7
+### a.
+```{r}
+autoplot((usnetelec))
+```
+<br>The series in the graph seems is linear increasing. So, we do one differecing and see whether it will become a stationary process.
+```{r}
+a.diff <- diff(usnetelec)
+ggAcf(a.diff,lag.max = 15)
+Box.test(a.diff,type="Ljung")
+```
+<br>ACF plot denotes the series after first order differencing is a stationary process. Also, p-value from Box.test is larger than 0.05 and, thus, cannot reject non hyphothesis, which means it is a stationary process.
+### d.
+```{r}
+autoplot(enplanements)
+```
+<br>In this plot, there seems to have a trend and a sesonality. However, the fluctuation gets larger with the time moving. We should first transform series and find out the order of differencing.
+```{r}
+lambda_enplanements <- BoxCox.lambda(enplanements)
+enplanements.boxcox <- BoxCox(enplanements,lambda_enplanements)
+autoplot(enplanements.boxcox)
+ndiffs(enplanements)
+nsdiffs(enplanements)
+```
+<br>Using r function, we seems should differecing the series one time for sesonality and one time for tendency.
+```{r}
+enplanements.boxcox.deseason <- diff(enplanements.boxcox, lag = 12)
+enplanements.boxcox.deseason.detrend <- diff(enplanements.boxcox.deseason)
+autoplot(enplanements.boxcox.deseason.detrend)
+ggAcf(enplanements.boxcox.deseason.detrend)
+Box.test(enplanements.boxcox.deseason.detrend,type="Ljung")
+```
+<br>The ACFs mainly lie inside the boundary and p-value from Box.test is smaller than 0.05 showing that the series after one differecing in seasonality and one in tendency becomes a stationary process.
+### 4.
+Let $x_t$ follows an ARMA(p,q) process. Then enplanements data can be written as:
+$$
+\begin{aligned}
+\Phi(B^{12})\Delta_{12}^1x_t = \Theta(B^{12})\epsilon_t
+\end{aligned}
+$$
+      
+## Question 8
+```{r}
+phi1 = -0.8
+phi2 = 0.3
+sigma = 1
+
+y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 3:100)
+  y[i] <- -0.8*y[i-1] + 0.3*y[i-2] + e[i]
+autoplot(y)
+```

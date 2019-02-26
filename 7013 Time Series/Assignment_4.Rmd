@@ -1,0 +1,596 @@
+---
+title: "Assignment 4"
+author: "Dongyu Zhang"
+date: "1/3/2019"
+output:
+  html_document:
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+library(TSA)
+library(tseries)
+library(zoo)
+library(MTS)
+
+acf.pacf <- function(ts.data){
+  par(mfrow=c(2,1))
+  Acf(ts.data)
+  Pacf(ts.data)
+}
+```
+
+## Question 1
+
+### a.
+```{r}
+autoplot(wmurders)
+```
+
+There is a significant trend in the data, we need to stablize it by differecing. Also, the data is quite flat at the begining and volatile before 1970, which means we need a log transformation here.
+
+```{r}
+w.log <- log(wmurders)
+w.diff <- diff(w.log)
+autoplot(w.diff)
+```
+
+After taking the first order differencing, the process does not look like a stationary process. We should take another differencing.
+
+```{r}
+w.sediff <- diff(w.diff)
+autoplot(w.sediff)
+```
+
+Now, the process looks like a stationary process. Let's check the ACF, PACF and adf to see whether this process is turely a stationary process.
+
+```{r}
+adf.test(w.sediff)
+tsdisplay(w.sediff, plot.type = "partial")
+```
+
+P-value from ADF test, which is <0.05, presenting that current series is stationary. However, spike when $lag=1$ in ACF and PACF plot implies that p and q in ARIMA model should not be 0 at the same time.
+
+```{r}
+w.fit <- auto.arima(w.log,d=2)
+checkresiduals(w.fit)
+tsdiag(w.fit)
+```
+
+Ljung-Box test proves the series is a stationary series.<br>
+So, ARIMA model for this series is ARIMA(1,2,1)
+
+### b.
+```{r}
+mean(w.fit$residuals)
+```
+No. We cannot see a clear drift from series' plot and the mean of residual is not relatively large. Therefore, a constant is not required.
+
+### c.
+
+$$
+\begin{aligned}
+x_t =& \Delta^2y_t\\
+x_t - \phi_1x_{t-1} =& \epsilon_t + \theta_1\epsilon_{t-1} \\
+(1 - \phi_1B)x_t =& (1 - \theta_1B)\epsilon_t \\
+(1 - \phi_1B)\Delta^2y_t = & (1 - \theta_1B)\epsilon_t \\
+\end{aligned}
+$$
+
+### d.
+
+```{r}
+fit <- Arima(wmurders, order=c(1,2,1))
+tsdiag(fit)
+```
+
+From plot for Ljung-Box test, all p-values lies far above boundary showing that the residuals have no different from white noise.
+
+### e.
+
+Since the series is a random walk, following 
+```{r}
+fcast <- forecast(fit, h=3)
+fcast$mean
+```
+
+$$
+\begin{aligned}
+(1 - \phi_1B)\Delta^2y_t = & (1 - \theta_1B)\epsilon_t \\
+(1 - \phi_1B)(1 - 2B + B^2) y_t = & (1 - \theta_1B)\epsilon_t \\
+(1 - 2B + B^2 - \phi_1B + 2\phi_1B^2 - \phi_1B^3) y_t = & (1 - \theta_1B)\epsilon_t \\
+[1 - (2+\phi_1)B + (1 + 2\phi_1)B^2 - \phi_1B^3] y_t = & (1 - \theta_1B)\epsilon_t \\
+\Rightarrow
+y_t = (2+\phi_1)y_{t-1} - (1 + 2\phi_1)y_{t-2} + \phi_1y_{t-3} &+ \epsilon_t - \theta_1\epsilon_{t-1} \\
+\end{aligned}\\
+
+\begin{aligned}\\
+\hat y_t(1) =& E(y_{t+1}|y_1,y_2,\cdots,y_t)\\
+\hat y_t(1) =& E((2+\phi_1)y_{t} - (1 + 2\phi_1)y_{t-1} + \phi_1y_{t-2} + \epsilon_{t+1} - \theta_1\epsilon_{t}|\cdots)\\
+\hat y_t(1) =& (2+\phi_1)y_{t} - (1 + 2\phi_1)y_{t-1} + \phi_1y_{t-2} - \theta_1\epsilon_{t}\\\\
+\hat y_t(2) =& E(y_{t+2}|y_1,y_2,\cdots,y_t)\\
+\hat y_t(2) =& E((2+\phi_1)y_{t+1} - (1 + 2\phi_1)y_{t} + \phi_1y_{t-1} + \epsilon_{t+2} - \theta_1\epsilon_{t+1}|\cdots)\\
+\hat y_t(2) =& (2+\phi_1)\hat y_t(1) - (1 + 2\phi_1)y_{t} + \phi_1y_{t-1}\\\\
+\hat y_t(3) =& E(y_{t+3}|y_1,y_2,\cdots,y_t)\\
+\hat y_t(3) =& E((2+\phi_1)y_{t+2} - (1 + 2\phi_1)y_{t+1} + \phi_1y_{t} + \epsilon_{t+3} - \theta_1\epsilon_{t+2}|\cdots)\\
+\hat y_t(3) =& (2+\phi_1)\hat y_t(2) - (1 + 2\phi_1)\hat y_t(1) + \phi_1y_{t}
+\end{aligned}
+$$
+
+```{r}
+phi1 <- fit$coef['ar1']
+theta1 <- fit$coef['ma1']
+yt <- fit$x
+et <- fit$residuals
+
+for (i in 1:3){
+  t <- length(yt)
+  y_fc <- (2+phi1)* yt[t] - (1+2*phi1)* yt[t-1] + phi1*yt[t-2] - theta1*et[t]
+  yt <- c(yt, y_fc)
+  et <- c(et, 0)
+}
+
+f <- yt[(length(yt) - 3 + 1):length(yt)]
+plot(fcast)
+# lines(fit$x - fit$residuals, col='blue')
+points(c(2005, 2006, 2007), f, col='red')
+
+```
+
+### f.
+```{r}
+autoplot(fcast)
+```
+
+### g.
+Since I used auto.arima in question a. Let's try to fit an ARIMA model by tradition method.
+
+```{r}
+tsdisplay(w.sediff, plot.type = "partial")
+```
+
+There is a significant spike at $lag=1$ in PACF polot and two spikes at $lag=1$ as well as $lag=2$ in ACF plot. It seems following ARMA(0,2). Let's try fitting ARMA(0,2) to see wether our asumption is correct.
+
+```{r}
+fit.02 <- Arima(wmurders, order=c(0, 2, 2))
+tsdisplay(residuals(fit.02), lag.max=20)
+tsdiag(fit.02)
+```
+
+From ACF and PACF plots, there is no any significant spike exceed boundary and, besides, p-values from Ljung-Box test are all above 0.05, meaning that residual is a stationary series.<br>
+Thus, using tradition method, ARIMA(0,1,2) is our choice while auto.arima chose ARIMA(1,2,1). Let's test which model is better.<br>
+```{r}
+summary(fit)
+summary(fit.02)
+```
+
+As the summary lies above, two model does not have a obivious difference. But ARIMA(0,2,2) is silightly better with lower AIC and BIC.
+
+
+## Question 2
+
+### a.
+```{r}
+autoplot(austourists)
+```
+There is a increasing trend and a seasonality in the plot.
+
+### b.
+```{r}
+Acf(austourists)
+```
+
+The ACF is decrease slowly with many lags exceed critical value and large spikes every 4 lag, implying that the series is not stationary and might have a quarterly seasonality.
+
+### c.
+```{r}
+Pacf(austourists)
+```
+
+The series is clearly not a stationary series, which needs differencing.
+
+### d.
+```{r}
+aus.deseason <- diff(austourists, lag = 4)
+autoplot(aus.deseason)
+```
+The plot of series after seasonal differencing doesn't look like a stationary series. Thus, we should take another differencing.
+
+```{r}
+aus.deseason.detrend <- diff(aus.deseason)
+autoplot(aus.deseason.detrend)
+```
+Now, the series looks like a stationary process. Let's check its ACF and PACF.
+
+```{r}
+acf.pacf(aus.deseason.detrend)
+```
+
+There are significant spikes at lag 1, 4 and 5 in ACF, implying this might be a $ARMA(0,1,1)(0,1,1)_4$. Try to fit the model with data and see how's our assumption.
+```{r}
+fit.0101 <- Arima(austourists, order = c(0,1,1), seasonal = c(0,1,1))
+checkresiduals(fit.0101)
+tsdiag(fit.0101)
+```
+
+Seems the model is quite well. So, we suggest $ARMA(0,1,1)(0,1,1)_4$.
+
+### e.
+```{r}
+aus.fit <- auto.arima(austourists)
+checkresiduals(aus.fit)
+tsdiag(aus.fit)
+```
+
+`auto.arima` gives an model of $ARMA(1,0,0)(1,1,0)_4$ which has not take the first-order differencing and contain a drift into the model. `p-values` for two models are almost the same. Have a look of their criterions.
+
+```{r}
+summary(fit.0101)
+summary(aus.fit)
+```
+
+As the information showing above, AIC, AICc, RMSE and MASE are smaller for `auto.arima` model while BIC is smaller for our model. As a conculsion, model generated by `auto.arima` is relatively better than ours.
+
+### f.
+Here we write our model in terms of backshift operator.
+$$
+\begin{aligned}
+(1 - B)(1 - B^4)x_t =&\,
+    (1 + \theta_1B)(1 + \Theta_1B^4)\epsilon_t \\
+(1-B-B^4+B^5)x_t =&\, 
+    (1 + \theta_1B + \Theta_1B^4 + \theta_1\Theta_1B^5)\epsilon_t\\
+x_t-x_{t-1}-x_{t-4}+x_{t-5} =&\,
+    \epsilon_t+\theta_1\epsilon_{t-1}+\Theta_1\epsilon_{t-4}+
+    \theta_1\Theta_1\epsilon_{t-5}\\
+\Rightarrow
+x_t = x_{t-1}+x_{t-4}-x_{t-5}+&\,\epsilon_t+\theta_1\epsilon_{t-1}+\Theta_1\epsilon_{t-4}+\theta_1\Theta_1\epsilon_{t-5}
+\end{aligned}
+$$
+
+## Question 3
+
+### a. 
+```{r}
+autoplot(sheep)
+```
+
+### b.
+$$
+\begin{aligned}
+y_t = y_{t-1} + \phi_1(y_{t-1}-y_{t-2}) + \phi_2(y_{t-2}-y_{t-3}) + \phi_3(y_{t-3}-y_{t-4}) + \epsilon_t \\
+y_t - y_{t-1} - \phi_1(y_{t-1}-y_{t-2}) - \phi_2(y_{t-2}-y_{t-3}) - \phi_3(y_{t-3}-y_{t-4}) = \epsilon_t \\
+((1 - B) - \phi_1(B-B^2) - \phi2(B^2 - B^3) - \phi_3(B^3 - B^4))y_t = \epsilon_t \\
+(1 - \phi_1B - \phi_2B^2 - \phi_3B^3)(1-B)y_t = \epsilon_t \\
+\end{aligned}
+$$
+It's ARIMA(3,1,0).
+
+### c.
+```{r}
+acf.pacf(diff(sheep))
+```
+
+PACF cuts of at lag 3, implying this should be an AR(3) process.
+
+### d.
+$$
+\begin{aligned}
+y_t =&\, y_{t-1} + .42(y_{t-1}-y_{t-2}) - .2(y_{t-2}-y_{t-3}) - .3(y_{t-3}-y_{t-4}) + \epsilon_t \\\\
+
+\hat y_t(1) =&\, E(y_{t+1}|y_1,y_2,\cdots,y_t) \\
+\hat y_t(1) =&\, E(y_{t} + .42(y_{t}-y_{t-1}) - .2(y_{t-1}-y_{t-2}) - .3(y_{t-2}-y_{t-3}) + \epsilon_{t+1}|\cdots) \\
+\hat y_t(1) =&\, y_{t} + .42(y_{t}-y_{t-1}) - .2(y_{t-1}-y_{t-2}) - .3(y_{t-2}-y_{t-3}) \\
+\hat y_t(1) =&\, 1797 + .42(1797-1791) - .2(1791-1627) - .3(1627-1665) \\
+\hat y_t(1) =&\, 1778.12 \\\\
+
+\hat y_t(2) =&\, E(y_{t+2}|y_1,y_2,\cdots,y_t) \\
+\hat y_t(2) =&\, E(y_{t+1} + .42(y_{t+1}-y_{t}) - .2(y_{t}-y_{t-1}) - .3(y_{t-1}-y_{t-2}) + \epsilon_{t+2}|\cdots) \\
+\hat y_t(2) =&\, \hat y_t(1) + .42(\hat y_t(1)-y_{t}) - .2(y_{t}-y_{t-1}) - .3(y_{t-1}-y_{t-2}) \\
+\hat y_t(2) =&\, 1778.12 + .42(1778.12-1797) - .2(1797-1791) - .3(1791-1627) \\
+\hat y_t(2) =&\, 1719.79 \\\\
+
+\hat y_t(3) =&\, E(y_{t+3}|y_1,y_2,\cdots,y_t) \\
+\hat y_t(3) =&\, E(y_{t+2} + .42(y_{t+2}-y_{t+1}) - .2(y_{t+1}-y_{t}) - .3(y_{t}-y_{t-1}) + \epsilon_{t+3}|\cdots) \\
+\hat y_t(3) =&\, \hat y_t(2) + .42(\hat y_t(2)-\hat y_t(1)) - .2(\hat y_t(1)-y_{t}) - .3(y_{t}-y_{t-1}) \\
+\hat y_t(3) =&\, 1719.79 + .42(1719.79-1778.12) - .2(1778.12-1797) - .3(1797-1791) \\
+\hat y_t(3) =&\, 1697.27 \\\\
+\end{aligned}
+$$
+Next three years forecast results calculated by hand are:
+$$
+1940 = 1778.12 \\
+1941 = 1719.79 \\
+1942 = 1697.27
+$$
+### e.
+
+```{r}
+sheep.fit <- Arima(sheep, order = c(3,1,0))
+sheep.fcast <- forecast(sheep.fit, h=3)
+sheep.fcast
+summary(sheep.fit)
+```
+
+Model generated by R through `Arima` has different coeffiecient from ours. As a result, the forecasts are slightly different from ours.
+
+
+## Question 4
+
+### a.
+```{r}
+autoplot(advert, facets=TRUE)
+```
+
+From above plot, we can find out that two series are contained in `advert` and, what's more, they have different scale. If we plot these two series into one graph without using `facets=TRUE` the change of each graph will be small.
+
+### b.
+```{r}
+advert.fit <- tslm(sales ~ advert, data = advert)
+summary(advert.fit)
+```
+
+After regression sales on advert, we have the linear model:<br>
+$sales = 78.73426 + 0.53426 * advert + \eta_t$
+
+### c.
+```{r}
+checkresiduals(advert.fit)
+```
+
+From the residuals plot, we could easily detect it is not stationary. P-values from Ljung-Box test equals to $ 0.02856 < 0.05 $, which means residuals have a huge different from a stationary series. Large spikes in ACF plot also support our view.
+
+### d.
+```{r}
+advert.arima.fit <- Arima(advert[,"sales"], xreg=advert[,"advert"], order=c(0,0,0))
+summary(advert.arima.fit)
+checkresiduals(advert.arima.fit)
+```
+
+P-values generate by Ljung-Box test is even smaller when using `Arima` to do the regression. We also lose 2 degree of freedom comparing to using `tslm`. However, the coefficients are the same.
+
+### e.
+```{r}
+advert.autofit <- auto.arima(advert[,"sales"], xreg=advert[,"advert"])
+summary(advert.autofit)
+```
+
+`auto.arima` take a differencing and, then, regress the model with $b = 0.5063$.
+
+### f.
+```{r}
+checkresiduals(advert.autofit)
+```
+
+$p-value=0.8862 >> 0.05$ saying that residuals have no difference to a stationary series. All ACF also lies within the boundary.
+
+### g.
+```{r}
+advert.fcast <- forecast(advert.autofit, xreg = rep(10, 6))
+autoplot(advert.fcast) + xlab("Month") + ylab("Sales")
+```
+
+## Question 5
+
+### a.
+$$
+\begin{align}
+(1-B)(1-B^{12})\eta_t = 
+    \frac{1-\theta_1B}{1-\phi_{12}B^{12} - \phi_{24}B^{24}}\epsilon_t  \\
+(1-B)(1-\phi_{12}B^{12} - \phi_{24}B^{24})(1-B^{12})\eta_t = (1-\theta_1B) \epsilon_t \\
+\end{align}
+$$
+
+After translation, it is obivious that model for $\eta_t$ is $ARMIA(0,1,1)(2,1,0)_{12}$
+
+### c.
+$$
+\begin{align}
+(1-B)(1-\phi_{12}B^{12} - \phi_{24}B^{24})(1-B^{12})\eta_t 
+    =&\, (1-\theta_1B) \epsilon_t \\
+(1-\phi_{12}B^{12}-\phi_{24}B^{24}-B+\phi_{12}B^{13}+\phi_{24}B^{25})(1-B^{12})\eta_t 
+    =&\, \epsilon_t -\theta_1\epsilon_{t-1}\\
+
+(1-B - (1+\phi_{12})B^{12}+(1+\phi_{12})B^{13}+(\phi_{12}-\phi_{24})B^{24}-(\phi_{12}-\phi_{24})B^{25}+ \phi_{24}B^{36}-\phi_{24}B^{37})\eta_t
+    =&\,  \epsilon_t -\theta_1\epsilon_{t-1} \\
+\eta_t = 
+    \eta_{t-1} + (1+\phi_{12})\eta_{t-12}-(1+\phi_{12})\eta_{t-13}-(\phi_{12}-\phi_{24})\eta_{t-24}+(\phi_{12}-\phi_{24})\eta_{t-25}-\phi_{24}\eta_{t-36}-\phi_{24}\eta_{t-37}+&\,\epsilon_t-\theta_1\epsilon_{t-1}  \\
+\end{align}
+$$
+
+### e.
+
+The linear correlation has been capture by $\beta_1$ and $\beta_2$, making standard regression for $\eta_t$ meaningless. Besides, intuitively, kilowatt-hours would be a time series, which will be left in $\eta_t$. Using ARMIA model for $\eta_t$ would contain as much as possible correlation from the data.<br>
+$\eta_t$ model would help linear model $y_t^*=\beta_1x_{1,t}^*+\beta_2x_{2,t}^*$ capture the flactuation to make our forecast more accuracy.
+
+
+## Mini Project
+```{r}
+da=read.table("../Data/m-hsmort7112.txt",header=T)
+zt=da[,3:4]
+colnames(zt) <- c("hs","mort")
+zt.train=zt[1:484,]
+zt.test=zt[485:492,]
+```
+
+### 1. Separate model
+
+#### Building mode lfor `hs` and forecast
+```{r}
+hs.ts <- ts(zt.train$hs,frequency=12,start=c(1971,4))
+autoplot(hs.ts)
+```
+
+It has a clear trend in the series. So, we should take the first order differencing.
+
+```{r}
+hs.diff <- diff(hs.ts)
+autoplot(hs.diff)
+acf.pacf(hs.diff)
+```
+
+After differencing, the series looks more stationary. Besides, ACF and PACF cut off at lag 1 while there are some spikes larger than critical value at lag 13 and lag 24. So, for seasonal model, it should be $ARIMA(0,0,2)_{12}$. For non-seasonal model, since there is a large spike at lag 1 and it seems to have a spike at lag 2 in PACF plot. Therefore, we suppose an $ARIMA(0,1,1)$, an $ARIMA(1,1,0)$ and an  $ARIMA(0,1,2)$ model. Let's fit the model to check our assumption.
+
+```{r}
+hs.fit.01 <- arima(hs.ts,order = c(0,1,1),seasonal = list(order=c(0,0,2), period=12))
+checkresiduals(hs.fit.01)
+
+hs.fit.10 <- arima(hs.ts,order = c(1,1,0),seasonal = list(order=c(0,0,2), period=12))
+checkresiduals(hs.fit.10)
+
+hs.fit.02 <- arima(hs.ts,order = c(0,1,2),seasonal = list(order=c(0,0,2), period=12))
+checkresiduals(hs.fit.02)
+```
+
+Model $ARIMA(0,1,2)$ seems having the largest p-value $p-value=0.02901$. But it is still lower than 0.05, thus, still a non-stationary series. <br>
+
+Looking into the ACF plot, there is some large spikes around lag 12, suggesting us to adjust seasonal ARIMA model. So increase $P$ in seasonal ARIMA model by one.
+
+```{r}
+hs.fit.02.12 <- Arima(hs.ts,order = c(0,1,2),seasonal = list(order=c(1,0,2), period=12))
+checkresiduals(hs.fit.02.12)
+tsdiag(hs.fit.02.12)
+```
+
+This model looks quite good, with $p-values > 0.05$ which means that we cannot distinguish any difference between residuals series and white noise. So, model for `hs` should be $ARIMA(0,1,2)(1,0,2)_{12}$<br>
+Then we forecast `hs` next 8 data.
+
+```{r}
+hs.fcast <- forecast(hs.fit.02.12, h=8)
+hs.fcast
+```
+
+#### Building model for `mort`
+
+```{r}
+mort.ts <- ts(zt.train$mort,frequency=12,start=c(1971,4))
+autoplot(mort.ts)
+```
+
+Same as `hs`, `mort` series have a significant trend. So, we need to take the first-order differencing.
+
+```{r}
+mort.diff <- diff(mort.ts)
+autoplot(mort.diff)
+```
+
+Now process looks much stationary. Let's check its ACF and PACF.
+
+```{r}
+acf.pacf(mort.diff)
+```
+
+From ACF and PACF plot, $ARIMA(0,1,2)$, $ARIMA(0,1,3)$, $ARIMA(1,1,0)$, $ARIMA(2,1,0)$ or $ARIMA(3,1,0)$ may fit the data.
+
+```{r}
+mort.fit.02 <- Arima(mort.ts, order = c(0,1,2))
+checkresiduals(mort.fit.02,plot=FALSE)
+
+mort.fit.03 <- Arima(mort.ts, order = c(0,1,3))
+checkresiduals(mort.fit.03,plot=FALSE)
+
+mort.fit.10 <- Arima(mort.ts, order = c(1,1,0))
+checkresiduals(mort.fit.10,plot=FALSE)
+
+mort.fit.20 <- Arima(mort.ts, order = c(2,1,0))
+checkresiduals(mort.fit.20,plot=FALSE)
+
+mort.fit.30 <- Arima(mort.ts, order = c(3,1,0))
+checkresiduals(mort.fit.30,plot=FALSE)
+```
+
+As results shown above, $ARIMA(2,1,0)$, $ARIMA(3,1,0)$ and $ARIMA(0,1,3)$ have the p-value for Ljung-Box test larger than 0.05. Then, we go for AIC to find the most proper model.
+
+```{r}
+acf.20 <- mort.fit.20$aic
+acf.30 <- mort.fit.30$aic
+acf.03 <- mort.fit.03$aic
+
+acf.20
+acf.30
+acf.03
+```
+
+Model $ARIMA(3,1,0)$ has the smallest AIC. So, model we propose fro `mort` is $ARIMA(3,1,0)$.
+
+### 2. Time series regression
+
+#### Building model for `hs` with `mort`
+
+##### Transforming data
+Let's first have a look of `hs` and `mort` again.
+```{r}
+par(mfrow=c(2,1))
+plot(hs.ts)
+plot(mort.ts)
+```
+There is a clearly negative correlation between `hs` as well as `mort` and, what's more, `mort`'s fluctuation is larger than `hs`. We should do some transformation to hs.
+
+```{r}
+mort.trans <- log(1/mort.ts)
+hs.log <- log(hs.ts)
+par(mfrow=c(2,1))
+plot(hs.log)
+plot(mort.trans)
+```
+`mort` now seems to have a linear correlation with `hs`. Let's find the ARIMA model through `auto.arima`
+
+##### Building model
+```{r}
+hs.auto.fit <- auto.arima(hs.ts, xreg = mort.trans)
+summary(hs.auto.fit)
+checkresiduals(hs.auto.fit)
+tsdiag(hs.auto.fit)
+```
+
+From the residuals plot, most of ACFs lies within critical values and `p-values` from Ljng-Box test are all much larger than 0.05, which proving that the residuals has no difference from stationary series. As a result, we could use this model to forecast `hs`.
+
+##### Forecasting `hs`
+```{r}
+mort.fcast <- forecast(mort.fit.30, h=8)$mean
+hs.lmreg.fcast <- forecast(hs.auto.fit, xreg = log(1/mort.fcast), h=8)
+hs.lmreg.fcast
+```
+
+### 3. Bivariate model
+```{r}
+zt.mul=diffM(zt.train)
+dim(zt.mul)
+MTSplot(zt.mul)
+VARorder(zt.mul)
+```
+
+As the results shown above, we set the order of VAR model to be 4.
+```{r}
+mul.var=VAR(zt.mul,4,output = FALSE)
+mul_fcast<-VARpred(mul.var,8,output = FALSE)
+mul_fcast<-mul_fcast$pred
+
+mul.diff <- as.numeric(mul_fcast)[1:8]
+hs.hat <- c(615, rep(NA, 9))
+for (i in 2:9){
+  hs.hat[i] = hs.hat[i-1]+mul.diff[i-1]
+}
+hs.var.fcast <- hs.hat[2:9]
+hs.var.fcast
+```
+
+### 4. Forecast results comparing
+```{r}
+accu.1 <- accuracy(hs.fcast,zt.test$hs)
+accu.2 <- accuracy(hs.lmreg.fcast,zt.test$hs)
+accu.3 <- accuracy(hs.var.fcast,zt.test$hs)
+rmse.df <- array(c(accu.1[2,2],accu.2[2,2],accu.3[2]), dim=c(3,1), 
+                 dimnames = list(c("Forecast 1","Forecast 2","Forecast 3"),c("RMSE")))
+rmse.df
+```
+
+From the result, the first model is the best among this three models.

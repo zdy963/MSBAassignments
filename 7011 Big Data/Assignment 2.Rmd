@@ -1,0 +1,319 @@
+---
+title: "Assignment 2"
+author: "Dongyu Zhang"
+date: "2/15/2019"
+output:
+  html_document:
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(grid)
+library(e1071)
+library(ISLR)
+library(gbm)
+library(glmnet)
+library(randomForest)
+```
+
+
+# Question 1
+
+## (a)
+```{r}
+toy <- data.frame(x1=c(3,2,4,1,2,4,4),x2=c(4,2,4,4,1,3,1),
+                  color=c('red','red','red','red','blue','blue','blue'))
+cols <- c("red" = "red", "blue" = "blue")
+sd_plot <- ggplot(toy, aes(x=x1,y=x2,color=color)) + geom_point() +
+  scale_color_manual(values = cols)
+sd_plot 
+```
+
+## (b)
+```{r}
+hyperplane <- sd_plot + geom_abline(intercept = -0.5, slope = 1)
+hyperplane
+```
+$$
+\begin{aligned}
+0.5-X_1+X_2=0
+\end{aligned}
+$$
+
+## (c)
+The idea of maximal margin classifier wants the margin of two classes as large as possible.
+In this case, observation will classify to Red if $0.5-X_1+X_2>0$, and classify to Blue otherwise.<br>
+Here, $\beta_0=0.5$, $\beta_1=-1$ and $\beta_2=1$.
+
+## (d)
+
+```{r}
+margin <- hyperplane + 
+  geom_abline(intercept = 0, slope = 1,linetype="dashed") + 
+  geom_abline(intercept = -1, slope = 1,linetype="dashed") + 
+  annotate("segment", x=2, xend=2.25, y=2, yend=1.75, color="black", size=0.2, arrow=arrow(ends="both",length=unit(0.2,"cm"))) +
+  annotate("segment", x=2, xend=1.75, y=1, yend=1.25, color="black", size=0.2, arrow=arrow(ends="both",length=unit(0.2,"cm"))) +
+  annotate("segment", x=4, xend=3.75, y=3, yend=3.25, color="black", size=0.2, arrow=arrow(ends="both",length=unit(0.2,"cm"))) + 
+  annotate("segment", x=4, xend=4.25, y=4, yend=3.75, color="black", size=0.2, arrow=arrow(ends="both",length=unit(0.2,"cm")))
+margin
+```
+
+## (e)
+```{r}
+margin + 
+  annotate("segment", x=2.5, xend=2.06, y=1, yend=1, color="blue", size=0.5, arrow=arrow(length=unit(0.2,"cm"))) +
+  annotate("segment", x=4, xend=4, y=2.5, yend=2.94, color="blue", size=0.5, arrow=arrow(length=unit(0.2,"cm"))) + 
+  annotate("segment", x=1.5, xend=1.94, y=2, yend=2, color="red", size=0.5, arrow=arrow(length=unit(0.2,"cm"))) + 
+    annotate("segment", x=3.5, xend=3.94, y=4, yend=4, color="red", size=0.5, arrow=arrow(length=unit(0.2,"cm")))
+```
+
+## (f)
+The hyperplane is defined by support vectors and the seventh observation is not support vector. So a slight movement will not affect the hyperplane if it does not move into the margin.
+
+## (g)
+```{r}
+sd_plot + geom_abline(intercept = -1, slope = 1.2)
+```
+$$
+\begin{aligned}
+1-1.2X_1+X_2=0
+\end{aligned}
+$$
+## (d)
+```{r}
+new_obs <- c(2,3,'blue')
+new_toy <- rbind(toy,new_obs)
+new_plot <- ggplot(new_toy, aes(x=x1,y=x2,color=color)) + geom_point() +
+  scale_color_manual(values = cols)
+new_plot 
+```
+
+
+
+# Question 2
+
+## (a)
+```{r}
+set.seed(999)
+x1 <- runif(500)-0.5
+x2 <- runif(500)-0.5
+y <- 1*(x1^2-x2^2 > 0)
+d2 <- data.frame(x1,x2,y)
+```
+
+## (b)
+```{r}
+d2$y <- factor(d2$y)
+sc_plot2 <- ggplot(d2, aes(x=x1,y=x2,color=y)) + geom_point()
+sc_plot2
+```
+
+## (c)
+```{r}
+lg.2 <- glm(y ~ x1 + x2, data = d2, family = 'binomial')
+summary(lg.2)
+```
+
+## (d)
+```{r}
+pred <- predict(lg.2, d2, type = "response")
+d2.1 <- cbind(d2,pred)
+d2.1$pred <- factor(ifelse(d2.1$pred >= 0.5, 1, 0))
+pred_sc <- ggplot(d2.1, aes(x=x1,y=x2,color=pred)) + geom_point()
+pred_sc
+```
+
+## (e)
+```{r}
+lg.2.qua <- glm(y ~ x1^2+x2^2+log(x1^2*x2^2), data = d2, family = 'binomial')
+summary(lg.2.qua)
+```
+
+## (f)
+```{r}
+pred2 <- predict(lg.2.qua, d2, type = "response")
+d2.2 <- cbind(d2,pred2)
+d2.2$pred2 <- factor(ifelse(d2.2$pred2 >= 0.5, 1, 0))
+pred2_sc <- ggplot(d2.2, aes(x=x1,y=x2,color=pred2)) + geom_point()
+pred2_sc
+```
+
+## (g)
+```{r}
+svmfit <- svm(y~x1+x2, data=d2, kernel="linear", cost=1,scale=FALSE)
+pred <- predict(svmfit,d2, type="response")
+d2.3 <- cbind(d2,pred)
+svm_pred_sc <- ggplot(d2.3, aes(x=x1,y=x2,color=pred)) + geom_point()
+svm_pred_sc
+```
+
+## (h)
+```{r}
+svmfit.2 <- svm(y~x1+x2, data=d2, kernel="radial", cost=1,scale=FALSE)
+pred <- predict(svmfit.2,d2, type="response")
+d2.4 <- cbind(d2,pred)
+svm_pred_sc.2 <- ggplot(d2.4, aes(x=x1,y=x2,color=pred)) + geom_point()
+svm_pred_sc.2
+```
+
+##(i)
+Though logsitic regression could give a classifier that have non-linear boundary, the boundary is not even close to real class. Support vector mechine with linear kernal does not have a significant different to logistic regression. However, with non-linear kernal, for example 'radial', it is able to give a very good classiffier that close to real class.
+
+# Question 3
+
+## (a)
+```{r}
+m.m <- median(Auto$mpg)
+Auto$y <- ifelse(Auto$mpg > m.m, 1, 0)
+```
+
+## (b)
+```{r}
+tune.out = tune(svm,y~.-mpg, data=Auto, kernel="linear",
+              ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100)))
+summary(tune.out)
+```
+
+Among all the cost value, $cost=1$ has the lowest error rate, with only 0.09454
+
+## (c)
+```{r}
+tune.out.2 = tune(svm,y~.-mpg, data=Auto, kernel="polynomial",
+              ranges=list(cost=c(0.01, 0.1, 1,5,10,100),
+                          degree=c(2,3,4,5)))
+summary(tune.out.2)
+```
+When $cost=100$ and $degree=3$, error rate reached bottom.
+
+
+```{r}
+tune.out.3 = tune(svm,y~.-mpg, data=Auto, kernel="radial",
+              ranges=list(cost=c(0.01, 0.1, 1,5,10,100),
+                          gamma = c(0.01, 0.1, 1,5,10,100)))
+summary(tune.out.3)
+```
+
+
+It's easily to find that error rate of svm with polynomial kernal is pretty high.<br>
+Error rate for svm with radial kernal has a large range, from 0.077 to 0.52. When $cost=0.1$, $gamma=0.1$, error rate reached the bottom, for only 0.0734.
+
+## (d)
+### Linear SVM
+```{r}
+svm.fit.linear <- svm(y~., data=Auto, kernel="linear", cost=1)
+
+plot(svm.fit.linear,Auto,mpg~weight)
+```
+
+### Question 4
+
+##(a)
+![Caption for the picture.](4.a.png)
+
+## (b)
+![Caption for the picture.](4.b.png)
+
+
+
+# Question 5
+
+## (a)
+```{r}
+Hitters <-  Hitters[-which(is.na(Hitters$Salary)), ]
+Hitters$Salary <- log(Hitters$Salary)
+```
+
+## (b)
+```{r}
+train <- sample(1:nrow(Hitters),200)
+h.train <- Hitters[train,]
+h.test <-  Hitters[-train,]
+```
+
+## (c)
+```{r}
+set.seed(99)
+lambda <- seq(-0,0.05,0.001)
+MSE <- rep(NA,length(lambda))
+for (i in 1:length(lambda)){
+  h.boost <- gbm(Salary~., h.train, distribution="gaussian",
+                 n.trees=1000, shrinkage=lambda[i])
+  h.pred <- predict(h.boost, h.train, n.trees=1000)
+  MSE[i] <- mean((h.pred - h.train$Salary)^2)
+}
+# plot(lambda, MSE, type = "b", xlab = "lambda", ylab = "Training MSE")
+boosting.1 <- data.frame(lambda=lambda, MSE=MSE)
+ggplot(boosting.1,aes(x=lambda,y=MSE)) + geom_line()
+```
+
+## (d)
+```{r}
+set.seed(99)
+lambda <- seq(-0,0.05,0.001)
+MSE.test <- rep(NA,length(lambda))
+for (i in 1:length(lambda)){
+  h.boost <- gbm(Salary~., h.train, distribution="gaussian",
+                 n.trees=1000, shrinkage=lambda[i])
+  h.pred <- predict(h.boost, h.test, n.trees=1000)
+  MSE.test[i] <- mean((h.pred - h.test$Salary)^2)
+}
+h.boosting.mse <- mean(MSE)
+boosting.2 <- data.frame(lambda=lambda, MSE=MSE.test)
+ggplot(boosting.2,aes(x=lambda,y=MSE)) + geom_line()
+```
+
+## (e)
+```{r}
+h.lm <- lm(Salary~., data = h.train)
+h.lm.pred <- predict(h.lm, h.test)
+h.lm.mse <- mean((h.lm.pred - h.test$Salary)^2)
+```
+
+```{r}
+ridge.train <- model.matrix(Salary ~ ., data = h.train)
+ridge.test <- model.matrix(Salary ~ ., data = h.test)
+y <- h.train$Salary
+
+lambdaGrid <- seq(0.5, 50, 0.5)
+cv.ridge <- cv.glmnet(ridge.train, y, alpha=0)
+best.lambda = cv.ridge$lambda.min
+
+h.ridge <- glmnet(ridge.train, y, alpha=0,lambda=lambdaGrid)
+h.ridge.pred <- predict(h.ridge, s=best.lambda, newx=ridge.test)
+h.ridge.mse <- mean((h.ridge.pred - h.test$Salary)^2)
+```
+
+```{r}
+mse <- data.frame(Boosting=h.boosting.mse,Linear=h.lm.mse,Ridge=h.ridge.mse)
+mse
+```
+
+As the result shown above, boosting has a much smaller testing error comparing with linear and ridge.
+
+
+## (f)
+```{r}
+summary(h.boost)
+```
+
+We can found that CAtBat is the most important predictor in the model.
+
+## (g)
+```{r}
+set.seed(99)
+h.bag <- randomForest(Salary~.,data=h.train,mtry=19,importance=TRUE)
+h.bag.pred <- predict(h.bag,newdata=h.test)
+h.bag.mse <- mean((h.bag.pred-h.test$Salary)^2)
+h.bag.mse
+```
+
+The MSE for Bagging is much smaller than linear regression and ridge regression. But is still significant larger than Boosting.
